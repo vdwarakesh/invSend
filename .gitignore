@@ -1,0 +1,39 @@
+# --- WhatsApp session / secrets ---
+# This file holds your linked-device session, encryption keys, etc.
+# NEVER commit it - anyone with it can act as your linked WhatsApp device.
+invsend.db
+*.db
+*.db-shm
+*.db-wal
+
+# --- Go ---
+# Compiled binaries
+invSend
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+
+# --- Editor / OS junk ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
