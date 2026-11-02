@@ -17,12 +17,12 @@ dir_sourceMap = get_sourceMap_dir(".")
 
 # ========== Fallbacks if and only if exact roleName.docx doesn't exist ==========
 message_roleMap = {
-    "l2 support - workday": ["l2","workday"],
+    "l2 support - workday": ["l2","workday","helloworld"],
     "veeva quality / safety / clinical / rim roles": ["veeva"]
 }
 
 file_roleMap = {
-    "workday": ["l2", "workday"],
+    "workday": ["l2", "workday","helloworld"],
     "veeva quality / safety / clinical / rim roles": ["veeva"]
 }
 # ========== End of fallbacks ==========
@@ -76,20 +76,13 @@ def get_profile_dir() -> str:
     return path
 
 
-def kill_chrome_process(proc: subprocess.Popen):
-    # Kill only the specific Chrome instance (and its child processes) that
-    # this script launched -- never other Chrome windows on the machine.
-    if proc is None:
-        return
-    print("Closing the Chrome instance this script launched...")
-    try:
-        subprocess.run(
-            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-    except Exception:
-        pass
-    time.sleep(1)
+def kill_chrome_process(proc: subprocess.Popen = None):
+    # subprocess.Popen's PID is unreliable here: Chrome's launcher process
+    # often re-execs into a different actual browser process, so killing
+    # that PID can hit nothing while the real instance keeps running. Kill
+    # by whatever is actually bound to the debug port instead -- that's
+    # unambiguously the real Chrome instance, not a launcher stub.
+    _free_port(DEBUG_PORT)
 
 
 def launch_chrome():
@@ -112,8 +105,10 @@ def launch_chrome():
             valid_path,
             f"--remote-debugging-port={DEBUG_PORT}",
             f"--user-data-dir={user_data_dir}",
+            "--no-first-run",
+            "--no-default-browser-check",
         ])
-        for _ in range(10):
+        for _ in range(30):
             if is_chrome_debugger_ready():
                 return proc, True
             time.sleep(0.5)
@@ -208,24 +203,69 @@ def expand_all_messages(page):
             pass
     page.wait_for_timeout(800)
 
-def ensure_gmail_loaded(page):
+def _find_logged_in_gmail_page(browser):
+    """Return the first tab across any context that has a loaded Gmail inbox."""
+    search_box_selector = 'input[aria-label="Search mail"], input[name="q"], div[gh="tl"]'
+    for ctx in browser.contexts:
+        for p_tab in list(ctx.pages):
+            try:
+                if p_tab.is_closed():
+                    continue
+                url = p_tab.url or ""
+                # Ignore Google Account login/marketing pages
+                if "mail.google.com/mail" in url and "accounts.google.com" not in url:
+                    loc = p_tab.locator(search_box_selector).first
+                    if loc.count() > 0 and loc.is_visible():
+                        return p_tab
+            except Exception:
+                continue
+    return None
+
+
+def ensure_gmail_loaded(browser, initial_page):
     try:
-        page.goto("https://mail.google.com/", wait_until="domcontentloaded")
+        initial_page.goto("https://mail.google.com/mail/u/0/", wait_until="domcontentloaded")
     except Exception as e:
-        # Google's login redirect chain aborts this initial navigation when
-        # the profile isn't logged in yet -- that's expected, not a real
-        # failure, so ignore it here and check the resulting URL instead.
         if "ERR_ABORTED" not in str(e):
-            raise
+            pass
 
-    page.wait_for_timeout(1500)
+    # Pump Playwright's event loop for up to 5 seconds to check if already logged in
+    for _ in range(10):
+        active_page = _find_logged_in_gmail_page(browser)
+        if active_page:
+            return active_page
+        try:
+            initial_page.wait_for_timeout(500)
+        except Exception:
+            time.sleep(0.5)
 
-    if "accounts.google.com" in page.url or "ServiceLogin" in page.url:
-        print("\nGmail isn't logged in yet in this Chrome profile.")
-        input("Log into Gmail in the Chrome window that opened, then press Enter here to continue...")
-        page.goto("https://mail.google.com/", wait_until="domcontentloaded")
-        page.wait_for_timeout(1500)
+    print("\nGmail isn't logged in yet in this Chrome profile.")
+    print("Log into Gmail in ANY tab in the Chrome window (it will continue automatically once the inbox loads)...")
 
+    while True:
+        active_page = _find_logged_in_gmail_page(browser)
+        if active_page:
+            print("Gmail login detected! Continuing...")
+            # Clean up any other leftover tabs so only the active Gmail tab remains
+            for ctx in browser.contexts:
+                for other_tab in list(ctx.pages):
+                    if other_tab != active_page and not other_tab.is_closed():
+                        try:
+                            other_tab.close()
+                        except Exception:
+                            pass
+            return active_page
+
+        # Pump the Playwright event loop using the first open tab so CDP events
+        # (new tabs, URL redirects, DOM changes) are actually received
+        open_tabs = [t for ctx in browser.contexts for t in ctx.pages if not t.is_closed()]
+        if open_tabs:
+            try:
+                open_tabs[0].wait_for_timeout(1000)
+            except Exception:
+                time.sleep(1)
+        else:
+            time.sleep(1)
 
 def run_search(page, query: str):
     search_input = page.locator('input[aria-label="Search mail"], input[name="q"]').first
@@ -273,16 +313,19 @@ def message_sender_ss(sender: str = None, subject: str = None, after_ss=None, ma
             raise RuntimeError("No Chrome browser context found.")
 
         context = browser.contexts[0]
-        # On a brand new profile, Chrome's very first tab can be transient
-        # and gets closed/replaced right as startup finishes -- grabbing a
-        # reference to it (context.pages[0]) can die out from under us.
-        # Always open a fresh tab instead; cookies/login are shared at the
-        # profile level, so this doesn't lose any session state.
-        time.sleep(1)
-        page = context.new_page()
+        
+        if context.pages:
+            page = context.pages[0]
+            for extra_page in context.pages[1:]:
+                try:
+                    extra_page.close()
+                except Exception:
+                    pass
+        else:
+            page = context.new_page()
 
         print("Navigating to Gmail...")
-        ensure_gmail_loaded(page)
+        page = ensure_gmail_loaded(browser, page)
         
         print(f'Searching with query: "{search_query}"...')
         run_search(page, search_query)
