@@ -11,7 +11,7 @@ Running this file does everything needed to get invSend working:
 6. Hands off to your own code at the bottom of this file.
 
 Deleting this entire folder removes everything: the venv, the Go module
-cache references, and invsend.db (your WhatsApp session/secrets) — nothing
+cache references, and invsend.db (your WhatsApp session/secrets) - nothing
 sensitive is stored outside this directory.
 """
 

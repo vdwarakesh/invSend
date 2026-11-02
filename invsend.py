@@ -47,7 +47,7 @@ def _free_port(port: int):
             subprocess.run(["kill", "-9", pid])
     time.sleep(1)
 
-# Folder containing main.go / go.mod — same folder as this file by default.
+# Folder containing main.go / go.mod - same folder as this file by default.
 GO_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _server_process = None  # keeps a reference so it isn't garbage collected
