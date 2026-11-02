@@ -1,13 +1,21 @@
 # --- WhatsApp session / secrets ---
-# This file holds your linked-device session, encryption keys, etc.
+# Holds your linked-device session, encryption keys, etc.
 # NEVER commit it - anyone with it can act as your linked WhatsApp device.
 invsend.db
 *.db
 *.db-shm
 *.db-wal
 
+# --- Chrome profile (Gmail login session) ---
+chrome-profile/
+
+# --- User-specific data / templates / outputs ---
+*.docx
+temp.png
+not-sent.txt
+server.log
+
 # --- Go ---
-# Compiled binaries
 invSend
 *.exe
 *.exe~
@@ -16,20 +24,18 @@ invSend
 *.dylib
 *.test
 *.out
-
-# Go workspace file
 go.work
 go.work.sum
 
 # --- Python ---
+.venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
 .eggs/
-.venv/
-venv/
-env/
 .Python
 
 # --- Editor / OS junk ---

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"go.mau.fi/whatsmeow"
@@ -17,28 +18,73 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+
 	waProto "go.mau.fi/whatsmeow/binary/proto" // adjust import path per your version
 	"google.golang.org/protobuf/proto"
 
-	"github.com/mdp/qrterminal/v3"
 	_ "modernc.org/sqlite"
 )
 
+const port = "60995"
+
 var client *whatsmeow.Client
 var ctx = context.Background()
+
+var qrMu sync.Mutex
+var currentQR string
+
+func setQR(code string) {
+	qrMu.Lock()
+	currentQR = code
+	qrMu.Unlock()
+}
+
+func getQR() string {
+	qrMu.Lock()
+	defer qrMu.Unlock()
+	return currentQR
+}
 
 func eventHandler(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
 		fmt.Println("Received a message!", v.Message.GetConversation())
+	case *events.PairSuccess:
+		setQR("") // clear QR once paired
 	}
 }
 
+// --- HTTP handlers ---
+
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	loggedIn := client.Store.ID != nil
+	resp := map[string]any{
+		"logged_in": loggedIn,
+		"connected": client.IsConnected(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func qrHandler(w http.ResponseWriter, r *http.Request) {
+	if client.Store.ID != nil {
+		http.Error(w, `{"error":"already logged in"}`, http.StatusConflict)
+		return
+	}
+	code := getQR()
+	if code == "" {
+		http.Error(w, `{"error":"qr not ready yet"}`, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"code": code})
+}
+
 type sendRequest struct {
-	Number   string `json:"number"`             // e.g. "919876543210"
+	Number   string `json:"number"`
 	Text     string `json:"text"`
-	FileB64  string `json:"file_b64,omitempty"`  // base64-encoded file bytes
-	FileName string `json:"file_name,omitempty"` // e.g. "invoice.pdf"
+	FileB64  string `json:"file_b64,omitempty"`
+	FileName string `json:"file_name,omitempty"`
 }
 
 func sendHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +155,7 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "send failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
 }
 
@@ -131,23 +178,32 @@ func main() {
 		if err = client.Connect(); err != nil {
 			panic(err)
 		}
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
-			} else {
-				fmt.Println("Login event:", evt.Event)
+		go func() {
+			for evt := range qrChan {
+				if evt.Event == "code" {
+					setQR(evt.Code)
+				} else {
+					fmt.Println("Login event:", evt.Event)
+					if evt.Event == "success" {
+						setQR("")
+					}
+				}
 			}
-		}
+		}()
 	} else {
 		if err = client.Connect(); err != nil {
 			panic(err)
 		}
 	}
 
-	http.HandleFunc("/send", sendHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/status", statusHandler)
+	mux.HandleFunc("/qr", qrHandler)
+	mux.HandleFunc("/send", sendHandler)
+
 	go func() {
-		fmt.Println("HTTP API listening on :8080")
-		http.ListenAndServe("127.0.0.1:8080", nil)
+		fmt.Println("HTTP API listening on 127.0.0.1:" + port)
+		http.ListenAndServe("127.0.0.1:"+port, mux)
 	}()
 
 	c := make(chan os.Signal, 1)
