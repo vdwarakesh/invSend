@@ -101,13 +101,18 @@ def launch_chrome():
 
     def _try_launch():
         print("Launching Chrome with remote debugging (project-local profile)...")
-        proc = subprocess.Popen([
-            valid_path,
-            f"--remote-debugging-port={DEBUG_PORT}",
-            f"--user-data-dir={user_data_dir}",
-            "--no-first-run",
-            "--no-default-browser-check",
-        ])
+        proc = subprocess.Popen(
+            [
+                valid_path,
+                f"--remote-debugging-port={DEBUG_PORT}",
+                f"--user-data-dir={user_data_dir}",
+                "--no-first-run",
+                "--no-default-browser-check",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         for _ in range(30):
             if is_chrome_debugger_ready():
                 return proc, True

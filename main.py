@@ -54,10 +54,8 @@ def _bootstrap_venv():
          os.path.join(SCRIPT_DIR, "requirements.txt")],
         check=True,
     )
-
-    # Hand off to the venv's interpreter, re-running this same script.
-    os.execv(venv_python, [venv_python] + sys.argv)
-
+    result = subprocess.run([venv_python] + sys.argv)
+    sys.exit(result.returncode)
 
 def _check_go_installed():
     try:
@@ -106,4 +104,8 @@ try:
 except Exception as e:
     print(f"\nSomething went wrong: {e}")
 finally:
-    input("\nPress Enter to exit...")
+    try:
+        input("\nPress Enter to exit...")
+    except EOFError:
+        pass
+    os._exit(0)
