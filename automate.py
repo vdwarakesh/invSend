@@ -17,12 +17,12 @@ dir_sourceMap = get_sourceMap_dir(".")
 
 # ========== Fallbacks if and only if exact roleName.docx doesn't exist ==========
 message_roleMap = {
-    "l2 support - workday": ["l2","workday","helloworld"],
+    "l2 support - workday": ["l2","workday"],
     "veeva quality / safety / clinical / rim roles": ["veeva"]
 }
 
 file_roleMap = {
-    "workday": ["l2", "workday","helloworld"],
+    "workday": ["l2", "workday"],
     "veeva quality / safety / clinical / rim roles": ["veeva"]
 }
 # ========== End of fallbacks ==========
@@ -273,7 +273,13 @@ def message_sender_ss(sender: str = None, subject: str = None, after_ss=None, ma
             raise RuntimeError("No Chrome browser context found.")
 
         context = browser.contexts[0]
-        page = context.pages[0] if context.pages else context.new_page()
+        # On a brand new profile, Chrome's very first tab can be transient
+        # and gets closed/replaced right as startup finishes -- grabbing a
+        # reference to it (context.pages[0]) can die out from under us.
+        # Always open a fresh tab instead; cookies/login are shared at the
+        # profile level, so this doesn't lose any session state.
+        time.sleep(1)
+        page = context.new_page()
 
         print("Navigating to Gmail...")
         ensure_gmail_loaded(page)
