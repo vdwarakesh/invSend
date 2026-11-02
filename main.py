@@ -101,4 +101,4 @@ ensure_ready()
 # ========== WhatsApp is Connected ==========
 
 from automate import message_sender_ss
-message_sender_ss(None,"helloworld",send_message)
+message_sender_ss(None,None,send_message)

@@ -1,4 +1,4 @@
-# invSend — User Guide
+# invSend - User Guide
 
 invSend automatically finds the right emails, gets the phone number from them, and sends that person a WhatsApp message with a screenshot of the email and the correct document attached - so you don't have to do it by hand, one by one.
 

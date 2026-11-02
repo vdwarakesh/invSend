@@ -16,12 +16,12 @@ dir_sourceMap = get_sourceMap_dir(".")
 
 # ========== Fallbacks if and only if exact roleName.docx doesn't exist ==========
 message_roleMap = {
-    "l2 support - workday": ["l2","workday"],
+    "l2 support - workday": ["l2","workday","helloworld"],
     "veeva quality / safety / clinical / rim roles": ["veeva"]
 }
 
 file_roleMap = {
-    "workday": ["l2", "workday"],
+    "workday": ["l2", "workday","helloworld"],
     "veeva quality / safety / clinical / rim roles": ["veeva"]
 }
 # ========== End of fallbacks ==========
@@ -226,7 +226,7 @@ def message_sender_ss(sender: str = None, subject: str = None, after_ss=None, ma
         
     search_query = " ".join(query_parts).strip()
     if not search_query:
-        search_query = "in:anywhere"
+        search_query = "in:inbox"
 
     if not is_chrome_debugger_ready():
         launch_chrome()
