@@ -28,11 +28,3 @@ def get_sourceMap_dir(directory: str = "."):
         role = filename.lower().strip()
         sourceMap[role] = filepath
     return sourceMap
-
-# MUST match (case insensitive) with the docx file name
-roleMap = {
-    "workday": ["l2", "workday"],
-    "veeva quality / safety / clinical / rim roles": ["veeva"]
-}
-
-sourceMap = get_sourceMap_dir(".")

@@ -1,5 +1,3 @@
-TEMPLATE_FILE_NAME = "template.docx"
-
 import re
 from docx import Document
 
@@ -38,11 +36,3 @@ def get_sourceMap_file(doc:str):
                 sourceMap[role.lower().strip()] = result.strip()
                 break
     return sourceMap
-
-# MUST match (case insensitive) with the role in template.docx
-roleMap = {
-    "l2 support - workday": ["l2","workday"],
-    "veeva quality / safety / clinical / rim roles": ["veeva"]
-}
-
-sourceMap = get_sourceMap_file(TEMPLATE_FILE_NAME)
