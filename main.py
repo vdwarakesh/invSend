@@ -96,9 +96,14 @@ _bootstrap_go()
 # --- Step 4: start server + handle login (safe to import now; we're in .venv) ---
 from invsend import ensure_ready, send_message  # noqa: E402
 
-ensure_ready()
+try:
+    ensure_ready()
 
-# ========== WhatsApp is Connected ==========
+    # ========== WhatsApp is Connected ==========
 
-from automate import message_sender_ss
-message_sender_ss(None,None,send_message)
+    from automate import message_sender_ss
+    message_sender_ss(None, None, send_message)
+except Exception as e:
+    print(f"\nSomething went wrong: {e}")
+finally:
+    input("\nPress Enter to exit...")
