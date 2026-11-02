@@ -1,5 +1,6 @@
 import base64
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -8,6 +9,43 @@ import requests
 
 PORT = 60995
 BASE_URL = f"http://127.0.0.1:{PORT}"
+
+
+def _port_in_use(port: int) -> bool:
+    """True if something is listening on this port, whether or not it's
+    actually answering requests (a hung/orphaned process still counts)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _free_port(port: int):
+    """Force-close whatever is holding this port -- used to recover from a
+    previous run that was killed uncleanly (e.g. the terminal window was
+    closed) and left a stale process still bound to it."""
+    print(f"Clearing a stale process on port {port} from a previous run...")
+    if os.name == "nt":
+        try:
+            out = subprocess.check_output(
+                ["netstat", "-ano"], text=True, stderr=subprocess.DEVNULL
+            )
+        except subprocess.CalledProcessError:
+            return
+        for line in out.splitlines():
+            if f":{port}" in line and "LISTENING" in line:
+                pid = line.strip().split()[-1]
+                subprocess.run(
+                    ["taskkill", "/PID", pid, "/F"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+    else:
+        try:
+            out = subprocess.check_output(["lsof", "-ti", f":{port}"], text=True)
+        except subprocess.CalledProcessError:
+            return
+        for pid in out.split():
+            subprocess.run(["kill", "-9", pid])
+    time.sleep(1)
 
 # Folder containing main.go / go.mod — same folder as this file by default.
 GO_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -118,6 +156,9 @@ def ensure_ready():
     """Start the Go server if needed, and wait for WhatsApp login if needed.
     Call this once at the top of your script before send_message()."""
     if not _is_server_up():
+        if _port_in_use(PORT):
+            _free_port(PORT)
+
         print("Starting WhatsApp server...")
         _start_server()
         if not _wait_for_server():
