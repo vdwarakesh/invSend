@@ -2,6 +2,7 @@ TEMPLATE_FILE = "template.docx"
 
 import re
 import os
+import socket
 import time
 import subprocess
 import urllib.request
@@ -28,6 +29,35 @@ file_roleMap = {
 
 DEBUG_PORT = 9222
 DEBUG_URL = f"http://127.0.0.1:{DEBUG_PORT}"
+
+def _port_in_use(port: int) -> bool:
+    """True if something is listening on this port, whether or not it's
+    actually answering requests (a hung/orphaned process still counts)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _free_port(port: int):
+    """Force-close whatever is holding this port -- recovers from a
+    previous run that was killed uncleanly (e.g. the terminal window was
+    closed) and left Chrome's debug port stuck."""
+    print(f"Clearing a stale process on port {port} from a previous run...")
+    try:
+        out = subprocess.check_output(
+            ["netstat", "-ano"], text=True, stderr=subprocess.DEVNULL
+        )
+    except subprocess.CalledProcessError:
+        return
+    for line in out.splitlines():
+        if f":{port}" in line and "LISTENING" in line:
+            pid = line.strip().split()[-1]
+            subprocess.run(
+                ["taskkill", "/PID", pid, "/F"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+    time.sleep(1)
+
 
 def is_chrome_debugger_ready() -> bool:
     try:
@@ -229,6 +259,11 @@ def message_sender_ss(sender: str = None, subject: str = None, after_ss=None, ma
         search_query = "in:inbox"
 
     if not is_chrome_debugger_ready():
+        if _port_in_use(DEBUG_PORT):
+            # Something is on the port but not answering as a debuggable
+            # Chrome instance -- almost always a leftover process from an
+            # earlier crash/forced close. Clear it before launching fresh.
+            _free_port(DEBUG_PORT)
         launch_chrome()
 
     with sync_playwright() as p:
